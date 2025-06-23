@@ -1,5 +1,4 @@
 import os
-import requests
 import fitz
 from tqdm.auto import tqdm
 import random
@@ -10,9 +9,6 @@ import textwrap
 import chromadb
 
 from time import perf_counter as timer
-from pdf_loader_and_chunk_generator import *
-from embedding_model import *
-from Get_embeddings import *
 from sentence_transformers import SentenceTransformer
 from sentence_transformers import util
 import torch
@@ -20,59 +16,45 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers import BitsAndBytesConfig
 
 import ollama
- 
-embedding_model = SentenceTransformer(model_name_or_path="all-mpnet-base-v2", device="cpu")
 
-embeddings, pages_and_chunks = Get_embeddings()
+# Import the query module
+from query_rag import query_rag, print_wrapped, generate_response
 
-query = "What is RPMB region in UFS?"
-print(f"Query: {query}")
+def main():
+    """
+    Main function to run RAG queries
+    """
+    # Example query - you can modify this or make it interactive
+    query = "What is RPMB region in UFS?"
+    
+    print("RAG Query System")
+    print("=" * 50)
+    
+    # Query the RAG system
+    results = query_rag(query, top_k=4)
+    
+    if results is None:
+        print("Failed to load embeddings. Please run generate_embeddings.py first.")
+        return
+    
+    # print(results)
+    top_results_dot_product, documents = results
+    
+    print(f"Results: ")
 
-query_embedding = embedding_model.encode(query, convert_to_tensor=True)
+    context = ""
+    
+    for score, idx in zip(top_results_dot_product[0][0], top_results_dot_product[1][0]):
+        print(f"Score: {score}")
+        print("Text: ")
+        context += (" " + print_wrapped(documents[idx]))
+        print("\n")
+        
+    # Generate response using Ollama
+    response = generate_response(context, query)
+    print("Generated Response:")
+    print(response)
 
-dot_scores = util.dot_score(a=query_embedding, b=embeddings)
-
-top_results_dot_product = torch.topk(dot_scores, k=1)
-print(top_results_dot_product)
-
-def print_wrapped(text, wrap_length=80):
-    wrapped_text = textwrap.fill(text, wrap_length)
-    print(wrapped_text)
-    return wrapped_text
-
-print(f"Results: ")
-
-for score, idx in zip(top_results_dot_product[0][0], top_results_dot_product[1][0]):
-    print(f"Score: {score}")
-    print("Text: ")
-    context = print_wrapped(pages_and_chunks[idx]["joined_sentence_chunk"])
-    print(f"Page number: {pages_and_chunks[idx]['page_number']}")
-    print("\n")
-
-# model_id = "C:/Users/MAHIMAK/AppData/Local/Ollama"
-
-# tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=model_id)
-
-# llm_model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=model_id, 
-                                                #  torch_dtype=torch.float16
-                                                #  )
-
-
-response = ollama.generate(
-    model="mistral",
-    prompt=f"Context: {context}\n\nQuestion: {query}\n\nAnswer:",
-    options={
-        "num_predict": 128,
-        "temperature": 0.3,
-        "top_k": 20
-    }
-)
-
-print(response["response"])
-
-# chroma_client = chromadb.PersistentClient(path="./chroma_db")
-# collection = chroma_client.get_collection(name="pdf_embeddings")
-# all = collection.get()
-# print(all.keys())
-# print(all['embeddings'][0])
+if __name__ == "__main__":
+    main()
 
