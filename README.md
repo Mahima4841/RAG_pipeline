@@ -13,9 +13,6 @@ In our specific example, we'll build UFS query system, a RAG workflow that allow
 
 ## Setup
 
-### create repo
-
-
 ### Create environment
 
 ```
